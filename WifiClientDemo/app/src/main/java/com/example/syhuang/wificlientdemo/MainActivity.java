@@ -1,20 +1,27 @@
 package com.example.syhuang.wificlientdemo;
 
+import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.DhcpInfo;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.format.Formatter;
 import android.util.Log;
@@ -41,6 +48,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public static final int SEND_MSG_SUCCSEE  = 3;//发送消息成功
     public static final int SEND_MSG_ERROR    = 4;//发送消息失败
     public static final int GET_MSG           = 6;//获取新消息
+    private static final String TAG = "MainActivity";
 
     private TextView      text_state;
     /**
@@ -112,6 +120,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         listenerThread = new ListenerThread(PORT, handler);
         listenerThread.start();
+
+        requestPermission();
     }
 
     /**
@@ -220,7 +230,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.send:
                 if (connectThread != null) {
-                    connectThread.sendData("这是来自Wifi-client热点的消息");
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            connectThread.sendData("这是来自Wifi-client热点的消息");
+                        }
+                    }).start();
                 } else {
                     Log.i("AAA", "connectThread == null");
                 }
@@ -280,11 +295,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             // Use the provided utility method to parse the result
             List<Uri> files = Utils.getSelectedFilesFromResult(data);
             for (Uri uri : files) {
-                File file = Utils.getFileForUri(uri);
+                final File file = Utils.getFileForUri(uri);
                 // Do something with the result...
 
                 if (connectThread != null) {
-                    connectThread.sendData(file);
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            connectThread.sendData(file);
+                        }
+                    }).start();
                 }
             }
         }
@@ -396,27 +416,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     };
 
+    @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
+            String state = "";
             switch (msg.what) {
                 case DEVICE_CONNECTING:
                     connectThread = new ConnectThread(listenerThread.getSocket(), handler);
                     connectThread.start();
+                    state = "设备连接中……";
                     break;
                 case DEVICE_CONNECTED:
-                    text_state.setText("设备连接成功");
+                    state = "设备连接成功";
                     break;
                 case SEND_MSG_SUCCSEE:
-                    text_state.setText("发送消息成功:" + msg.getData().getString("MSG"));
+                    state = "发送消息成功:" + msg.getData().getString("MSG");
                     break;
                 case SEND_MSG_ERROR:
-                    text_state.setText("发送消息失败:" + msg.getData().getString("MSG"));
+                    state = "发送消息失败:" + msg.getData().getString("MSG");
                     break;
                 case GET_MSG:
-                    text_state.setText("收到消息:" + msg.getData().getString("MSG"));
+                    state = "收到消息:" + msg.getData().getString("MSG");
                     break;
             }
+            text_state.setText(state);
+            Log.i(TAG, "handleMessage: " + state);
         }
     };
 
@@ -443,6 +468,36 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
         //        Log.i("connectIp:", connectedIP);
         return connectedIP;
+    }
+
+    private void requestPermission() {
+        //1. 检查是否已经有该权限
+        if (Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            //2. 权限没有开启，请求权限
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.ACCESS_FINE_LOCATION}, 111);
+        } else {
+            //权限已经开启，做相应事情
+            Log.i(TAG, "requestPermission: 权限已经开启");
+        }
+    }
+
+    //3. 接收申请成功或者失败回调
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 111) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                //权限被用户同意,做相应的事情
+                Log.i(TAG, "onRequestPermissionsResult: 权限被用户同意");
+            } else {
+                //权限被用户拒绝，做相应的事情
+                Log.i(TAG, "onRequestPermissionsResult: 权限被用户拒绝");
+                finish();
+            }
+        }
     }
 
     @Override

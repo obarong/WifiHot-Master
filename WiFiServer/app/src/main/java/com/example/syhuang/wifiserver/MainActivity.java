@@ -1,5 +1,6 @@
 package com.example.syhuang.wifiserver;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
@@ -30,6 +31,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public static final int SEND_MSG_SUCCSEE  = 3;//发送消息成功
     public static final int SEND_MSG_ERROR    = 4;//发送消息失败
     public static final int GET_MSG           = 6;//获取新消息
+    private static final String TAG = "MainActivity";
     private TextView      text_state;
     private WifiManager   wifiManager;
     /**
@@ -143,9 +145,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.send:
                 //TODO implement
                 if (connectThread != null) {
-                    connectThread.sendData("这是来自Wifi热点的消息");
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            connectThread.sendData("这是来自Wifi热点的消息");
+                        }
+                    }).start();
                 } else {
-                    Log.w("AAA", "connectThread == null");
+                    Log.w(TAG, "connectThread == null");
                 }
                 break;
         }
@@ -166,7 +173,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         config.allowedAuthAlgorithms
                 .set(WifiConfiguration.AuthAlgorithm.OPEN);//开放系统认证
         config.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
-        config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
+        config.allowedKeyManagement.set(4);//4 means WPA2_PSK
         config.allowedPairwiseCiphers
                 .set(WifiConfiguration.PairwiseCipher.TKIP);
         config.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
@@ -276,27 +283,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         text_state.setText("热点已关闭");
     }
 
+    @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
+            String state = "";
             switch (msg.what) {
                 case DEVICE_CONNECTING:
                     connectThread = new ConnectThread(MainActivity.this, listenerThread.getSocket(), handler);
                     connectThread.start();
+                    state = "设备连接中……";
                     break;
                 case DEVICE_CONNECTED:
-                    text_state.setText("设备连接成功");
+                    state = "设备连接成功";
                     break;
                 case SEND_MSG_SUCCSEE:
-                    text_state.setText("发送消息成功:" + msg.getData().getString("MSG"));
+                    state = "发送消息成功:" + msg.getData().getString("MSG");
                     break;
                 case SEND_MSG_ERROR:
-                    text_state.setText("发送消息失败:" + msg.getData().getString("MSG"));
+                    state = "发送消息失败:" + msg.getData().getString("MSG");
                     break;
                 case GET_MSG:
-                    text_state.setText("收到消息:" + msg.getData().getString("MSG"));
+                    state = "收到消息:" + msg.getData().getString("MSG");
                     break;
             }
+            text_state.setText(state);
+            Log.i(TAG, "handleMessage: " + state);
         }
     };
 
